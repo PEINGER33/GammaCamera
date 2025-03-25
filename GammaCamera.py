@@ -1,5 +1,6 @@
 import opengate as gate
 import math
+import opengate.contrib.phantoms.nemaiec as gate_iec
 
 if __name__ == "__main__":
     # Création de la simulation
@@ -20,10 +21,13 @@ if __name__ == "__main__":
     mm = gate.g4_units.mm
     keV = gate.g4_units.keV
     gcm3 = gate.g4_units.g / cm**3
+    Bq = gate.g4_units.Bq
+    mL = gate.g4_units.cm3
+    BqmL = Bq / mL
 
     # Définition du monde
     world = sim.world
-    world.size = [50 * cm, 50 * cm, 50 * cm]
+    world.size = [100 * cm, 100 * cm, 100 * cm]
     world.material = "G4_AIR"
 
     # Ajout des matériaux
@@ -35,7 +39,7 @@ if __name__ == "__main__":
     camera_distance = 0 * cm  # Distance de la caméra par rapport à la source
     x_position = camera_distance  # Position de la caméra sur l'axe X
     y_position = 0  # Alignée sur l'axe Y
-    z_position = 15 * cm  # Hauteur de la caméra
+    z_position = 30 * cm  # Hauteur de la caméra
     
     # Parametre de translation circulaire
     translations_circle, rotations_circle = gate.geometry.utility.get_circular_repetition(number_of_repetitions=2, first_translation=[ 0, 0, z_position], axis=[0, 1, 0])
@@ -113,15 +117,12 @@ if __name__ == "__main__":
     hits_actor.output_filename = "gamma_hits.root"
     hits_actor.attributes = ["TotalEnergyDeposit", "PostPosition"]
 
-    # Ajouter la source gamma Tc-99m (spectre)
-    source = sim.add_source("GenericSource", "gamma_source")
-    source.particle = "gamma"
-    source.energy.mono = 140 * keV  # Énergie du Tc-99m
-    source.position.type = "sphere"
-    source.position.radius = 5 * mm
-    source.position.translation = [0, 0, 0]  # Position de la source au centre
-    source.direction.type = "iso"
-    source.n = 500
+    # Ajout du phantom    
+    iec_phantom = gate_iec.add_iec_phantom(sim, 'iec_phantom')
+    #iec_phantom.translation = [0, 0, -8 * cm]
+    activities = [0.1 * BqmL, 0.2 * BqmL, 0.3 * BqmL, 0.4 * BqmL, 0.5 * BqmL, 0.6 * BqmL]
+    iec_source = gate_iec.add_spheres_sources(sim, 'iec_phantom', 'iec_source', 'all', activities)
+    iec_bg_source = gate_iec.add_background_source(sim, 'iec_phantom', 'iec_bg_source', 0.01 * BqmL)
 
     # Configuration de la physique
     sim.physics_manager.physics_list_name = "G4EmStandardPhysics_option4"
@@ -133,5 +134,4 @@ if __name__ == "__main__":
 
     # Affichage des résultats
     print("Simulation terminée.")
-
 
