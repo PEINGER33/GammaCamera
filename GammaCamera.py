@@ -39,7 +39,7 @@ if __name__ == "__main__":
     camera_distance = 0 * cm  # Distance de la caméra par rapport à la source
     x_position = camera_distance  # Position de la caméra sur l'axe X
     y_position = 0  # Alignée sur l'axe Y
-    z_position = 30 * cm  # Hauteur de la caméra
+    z_position = 22 * cm  # Hauteur de la caméra
     
     # Parametre de translation circulaire
     translations_circle, rotations_circle = gate.geometry.utility.get_circular_repetition(number_of_repetitions=2, first_translation=[ 0, 0, z_position], axis=[0, 1, 0])
@@ -52,8 +52,9 @@ if __name__ == "__main__":
     
     # Création du collimateur (en plomb)
     collimator = sim.add_volume("Box", "collimator")
-    collimator.material = "Lead"
-    collimator.size = [10 * cm, 10 * cm, 5 * cm]
+    collimator.material = "G4_AIR"
+    #collimator.material = "Lead"
+    collimator.size = [54 * cm, 40 * cm, 5.8 * cm]
     collimator.translation = [x_position, y_position, z_position]  # Position du collimateur
     collimator.color = [0.5, 0.5, 0.5, 1]  # Gris
     collimator.translation = translations_circle
@@ -62,7 +63,7 @@ if __name__ == "__main__":
     # Création du cristal scintillant (NaI)
     crystal = sim.add_volume("Box", "crystal")
     crystal.material = "NaI"
-    crystal.size = [10 * cm, 10 * cm, 1 * cm]
+    crystal.size = [54 * cm, 40 * cm, 1.59 * cm]
     crystal.translation = [x_position, y_position, z_position + 3 * cm]  # Position du cristal
     crystal.color = [1, 0, 0, 1]  # Rouge
     crystal.translation = translations_circle_2
@@ -71,44 +72,49 @@ if __name__ == "__main__":
     # Création du guide de lumière (Quartz)
     light_guide = sim.add_volume("Box", "light_guide")
     light_guide.material = "Quartz"
-    light_guide.size = [10 * cm, 10 * cm, 0.5 * cm]
-    light_guide.translation = [x_position, y_position, z_position + 3.75 * cm]  # Derrière le cristal
+    light_guide.size = [54 * cm, 40 * cm, 0.5 * cm]
+    light_guide.translation = [x_position, y_position, z_position + 1.59 * cm + 0.25 * cm]  # Derrière le cristal
     light_guide.color = [0, 1, 1, 0.5]  # Cyan transparent
     light_guide.translation = translations_circle_3
     light_guide.rotation = rotations_circle_3
 
+    pmt_size = [6 * cm, 6 * cm, 2 * cm]
+    x_range = [-24, -12, 0, 12, 24]
+    y_range = [-18, -6, 6, 18]
+    
+    # Position centrale Z des PMT (derrière cristal et light guide)
+    local_z = 1.59 * cm + 0.5 * cm + 1 * cm
+    base_translation = [0, 0, z_position + local_z]
+    
     # Création des tubes photomultiplicateurs (PMT)
-    pmt_size = [3 * cm, 3 * cm, 2 * cm]  # Taille d'un PMT
+    pmt_size = [8 * cm, 8 * cm, 3 * cm]  # Taille d'un PMT
 
 
-    pmt = sim.add_volume("Box", "PMT_1")
-    pmt.material = "G4_AIR"
-    pmt.size = pmt_size
-    pmt.color = [1, 1, 0, 1]  # Jaune
-    pmt.translation = translations_circle_4
-    pmt.rotation = rotations_circle_4
+    # Coordonnées locales des PMTs (sur XY)
+    pmt_positions = [
+        [-18 * cm, -12 * cm],  # PMT_1 coin bas gauche
+        [18 * cm, 12 * cm],    # PMT_2 coin haut droit
+        [-18 * cm, 12 * cm],   # PMT_3 coin haut gauche
+        [18 * cm, -12 * cm]    # PMT_4 coin bas droit
+        ]
     
-    pmt = sim.add_volume("Box", "PMT_2")
-    pmt.material = "G4_AIR"
-    pmt.size = pmt_size
-    pmt.color = [1, 1, 0, 1]  # Jaune
-    pmt.translation = translations_circle_5
-    pmt.rotation = rotations_circle_5
+    # Z position cohérente derrière crystal + guide
+    z_pmt = z_position + 5.5 * cm
     
-    pmt = sim.add_volume("Box", "PMT_3")
-    pmt.material = "G4_AIR"
-    pmt.size = pmt_size
-    pmt.color = [1, 1, 0, 1]  # Jaune
-    pmt.translation = translations_circle_6
-    pmt.rotation = rotations_circle_6
-    
-    pmt = sim.add_volume("Box", "PMT_4")
-    pmt.material = "G4_AIR"
-    pmt.size = pmt_size
-    pmt.color = [1, 1, 0, 1]  # Jaune
-    pmt.translation = translations_circle_7
-    pmt.rotation = rotations_circle_7
-    
+    # Boucle sur les positions locales
+    for i, (x, y) in enumerate(pmt_positions, start=1):
+        trans_local = [x, y, z_pmt]
+        translations, rotations = gate.geometry.utility.get_circular_repetition(
+            number_of_repetitions=2,
+            first_translation=trans_local,
+            axis=[0, 1, 0]
+            )
+        pmt = sim.add_volume("Box", f"PMT_{i}")
+        pmt.material = "G4_AIR"
+        pmt.size = pmt_size
+        pmt.color = [1, 1, 0, 1]
+        pmt.translation = translations
+        pmt.rotation = rotations
     
 
     # Attacher l'acteur de hits au cristal
@@ -116,6 +122,16 @@ if __name__ == "__main__":
     hits_actor.attached_to = "crystal"  # Attaché au cristal
     hits_actor.output_filename = "gamma_hits.root"
     hits_actor.attributes = ["TotalEnergyDeposit", "PostPosition"]
+    
+    # Ajouter une image de projection simple
+    proj = sim.add_actor("DigitizerProjectionActor", "projection")
+    proj.attached_to = "crystal"
+    proj.physical_volume_index = 0  # ou 1 pour la 2e caméra
+    proj.input_digi_collections = ["hits"]
+    proj.size = [128, 128]  # pixels (x, y)
+    proj.spacing = [4.2 * mm, 4.2 * mm]  # taille pixel
+    proj.output_filename = "output/projection_spect.mhd"
+
 
     # Ajout du phantom    
     iec_phantom = gate_iec.add_iec_phantom(sim, 'iec_phantom')
