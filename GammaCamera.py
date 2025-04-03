@@ -1,21 +1,24 @@
 import opengate as gate
 import math
 import opengate.contrib.phantoms.nemaiec as gate_iec
+import SimpleITK as sitk
 
 if __name__ == "__main__":
     # Création de la simulation
     sim = gate.Simulation()
-
+    sim.number_of_threads = 4
+    
     # Configuration globale
     sim.verbose_level = gate.logger.DEBUG
     sim.running_verbose_level = gate.logger.RUN
     sim.g4_verbose = False
-    sim.visu = True
-    sim.visu_type = "vrml"  # Visualisation en 3D
+    sim.visu = False
+    sim.visu_type = "qt"  # Visualisation en 3D
     sim.random_engine = "MersenneTwister"
     sim.random_seed = "auto"
     sim.output_dir = "./output"
-
+    
+    
     # Définition des unités
     cm = gate.g4_units.cm
     mm = gate.g4_units.mm
@@ -24,17 +27,19 @@ if __name__ == "__main__":
     Bq = gate.g4_units.Bq
     mL = gate.g4_units.cm3
     BqmL = Bq / mL
-
+    MBq = 1e6 * Bq
+    MBqmL = MBq / mL
+    
     # Définition du monde
     world = sim.world
     world.size = [100 * cm, 100 * cm, 100 * cm]
     world.material = "G4_AIR"
-
+    
     # Ajout des matériaux
     sim.volume_manager.material_database.add_material_nb_atoms("Lead", ["Pb"], [1], 11.4 * gcm3)
     sim.volume_manager.material_database.add_material_nb_atoms("NaI", ["Na", "I"], [1, 1], 3.67 * gcm3)
     sim.volume_manager.material_database.add_material_nb_atoms("Quartz", ["Si", "O"], [1, 2], 2.2 * gcm3)
-
+    
     # Position de la gamma caméra
     camera_distance = 0 * cm  # Distance de la caméra par rapport à la source
     x_position = camera_distance  # Position de la caméra sur l'axe X
@@ -52,13 +57,54 @@ if __name__ == "__main__":
     
     # Création du collimateur (en plomb)
     collimator = sim.add_volume("Box", "collimator")
-    collimator.material = "G4_AIR"
-    #collimator.material = "Lead"
+    #collimator.material = "G4_AIR"
+    collimator.material = "Lead"
     collimator.size = [54 * cm, 40 * cm, 5.8 * cm]
     collimator.translation = [x_position, y_position, z_position]  # Position du collimateur
     collimator.color = [0.5, 0.5, 0.5, 1]  # Gris
     collimator.translation = translations_circle
     collimator.rotation = rotations_circle
+    
+    # Ajout des cylindres d'air dans le collimateur pour simuler les trous
+    n_holes_x = 10
+    n_holes_y = 10
+    
+    hole_length = 58 * mm
+    hole_diameter = 3.0 * mm
+    hole_radius = 1.5 * mm
+    septal_thickness = 1.05 * mm
+    
+    spacing = hole_diameter + septal_thickness  # => 4.05 mm
+    
+    # Paramètres des trous
+    hole_length = 58 * mm
+    hole_diameter = 3.0 * mm
+    hole_radius = hole_diameter / 2
+    septal_thickness = 1.05 * mm
+    spacing = hole_diameter + septal_thickness  # => 4.05 mm
+    
+    # Calcul dynamique du nombre de trous
+    colli_x, colli_y, _ = collimator.size
+    n_holes_x = int(colli_x / spacing)
+    n_holes_y = int(colli_y / spacing)
+    
+    # Génération des trous d’air dans un motif hexagonal
+    for i in range(n_holes_x):
+        for j in range(n_holes_y):
+            offset = 0.5 * spacing if j % 2 == 1 else 0.0
+            x = (i - n_holes_x / 2) * spacing + offset
+            y = (j - n_holes_y / 2) * spacing
+            z = 0  # centré dans le collimateur
+            
+            hole = sim.add_volume("Tubs", f"hole_{i}_{j}")
+            hole.mother = "collimator"
+            hole.rmin = 0
+            hole.rmax = hole_radius
+            hole.dz = hole_length / 2
+            hole.translation = [x, y, z]
+            hole.material = "G4_AIR"
+            hole.color = [0.8, 0.8, 1, 0.3]  # bleu pâle transparent
+
 
     # Création du cristal scintillant (NaI)
     crystal = sim.add_volume("Box", "crystal")
@@ -130,24 +176,29 @@ if __name__ == "__main__":
     proj.input_digi_collections = ["hits"]
     proj.size = [128, 128]  # pixels (x, y)
     proj.spacing = [4.2 * mm, 4.2 * mm]  # taille pixel
-    proj.output_filename = "output/projection_spect.mhd"
-
-
-    # Ajout du phantom    
+    index = 7
+    proj.output_filename = f"output/projection_{index}.mhd"
+    #proj.output_filename = "output/projection_spect.mhd"
+    
+    
+    
+    # Ajout du phantom
     iec_phantom = gate_iec.add_iec_phantom(sim, 'iec_phantom')
-    #iec_phantom.translation = [0, 0, -8 * cm]
-    activities = [0.1 * BqmL, 0.2 * BqmL, 0.3 * BqmL, 0.4 * BqmL, 0.5 * BqmL, 0.6 * BqmL]
+    activities = [10000* BqmL, 20000* BqmL, 30000* BqmL, 40000* BqmL, 50000* BqmL, 60000*BqmL]
     iec_source = gate_iec.add_spheres_sources(sim, 'iec_phantom', 'iec_source', 'all', activities)
-    iec_bg_source = gate_iec.add_background_source(sim, 'iec_phantom', 'iec_bg_source', 0.01 * BqmL)
-
+    iec_bg_source = gate_iec.add_background_source(sim, 'iec_phantom', 'iec_bg_source', 10 * BqmL)
+    # activities = [1 * MBqmL, 2 * MBqmL, 3 * MBqmL, 4 * MBqmL, 5 * MBqmL, 6 * MBqmL]
+    # iec_source = gate_iec.add_spheres_sources(sim, 'iec_phantom', 'iec_source', 'all', activities)
+    # iec_bg_source = gate_iec.add_background_source(sim, 'iec_phantom', 'iec_bg_source', 0.1 * MBqmL)
+    
     # Configuration de la physique
     sim.physics_manager.physics_list_name = "G4EmStandardPhysics_option4"
     sim.physics_manager.set_production_cut("world", "gamma", 1 * mm)
-
+    
     # Lancer la simulation
-    sim.number_of_events = 1000  # Nombre d'événements
+    sim.number_of_events = int(1e6) # Nombre d'événements
     sim.run()
-
+    
     # Affichage des résultats
     print("Simulation terminée.")
 
