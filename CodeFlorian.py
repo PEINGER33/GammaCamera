@@ -18,6 +18,7 @@ def newTete(index):
     # Création du collimateur (en plomb)
     tete.append(newCollimator(index))
 
+
     # Création du cristal scintillant (NaI)
     tete.append(newCrystal(index))
 
@@ -155,7 +156,7 @@ if __name__ == "__main__":
     
     # Création d'une camera
     camera = newCamera(2)
-    RotCircOy(camera, 380)
+    RotCircOy(camera, 0)
     
     # Attacher l'acteur de hits au cristal
     hits_actor = sim.add_actor("DigitizerHitsCollectionActor", "hits")
@@ -173,7 +174,7 @@ if __name__ == "__main__":
     proj.output_filename = "output/projection_spect.mhd"
 
 
-    # Ajout du phantom    
+    # Ajout du phantom
     iec_phantom = gate_iec.add_iec_phantom(sim, 'iec_phantom')
     #iec_phantom.translation = [0, 0, -8 * cm]
     activities = [0.1 * BqmL, 0.2 * BqmL, 0.3 * BqmL, 0.4 * BqmL, 0.5 * BqmL, 0.6 * BqmL]
